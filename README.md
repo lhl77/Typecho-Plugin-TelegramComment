@@ -19,12 +19,10 @@ Telegram 推送 Typecho 评论通知与审核（支持多 Chat ID 群发、邮�
 - 支持多个默认 `chat_id` 群发（逗号/换行分隔）
 - 支持 **邮箱 -> Chat ID** 绑定：命中邮箱时可定向推送
 - 支持评论审核按钮（Inline Keyboard）：
-  - 通过 / 垃圾 / 删除
+  - 通过 / 垃圾 / 删除https://blog.lhl.one/artical/815.html
 - 支持在 Telegram 中 **直接回复推送消息** 来发布 Typecho 回复评论
 - Webhook 一键配置/检测（插件设置页内按钮触发 AJAX）
-
-TODO:
-文章推送
+(TODO:文章推送)
 ---
 
 ## 目录结构说明
