@@ -131,6 +131,8 @@ admin@example.com=-1001234567890
 - 必须签名校验通过（签名算法见 [`TypechoPlugin\TelegramNotice\Plugin::signCallback`](TelegramNotice/Plugin.php)）
 - 原评论必须为 `approved` 才允许回复
 
+注：回复时ip取`127.0.0.1`,Agent取`TelegramReply`
+
 ---
 
 ## 常见问题
