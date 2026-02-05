@@ -35,6 +35,7 @@ class TelegramComment_Action extends Widget implements \Widget\ActionInterface
     public function execute()
     {
         $do = trim($this->req('do', ''));
+
         if ($do === 'webhookCheck' || $do === 'webhookSet') {
             $this->handleWebhookAjax($do);
             return;
@@ -42,6 +43,15 @@ class TelegramComment_Action extends Widget implements \Widget\ActionInterface
 
         if ($do === 'webhook') {
             $this->handleTelegramWebhook();
+            return;
+        }
+
+        if ($do === 'pushPost') {
+            $this->handleAdminPushPost();
+            return;
+        }
+        if ($do === 'pushTplSave') {
+            $this->handleAdminSavePushTpl();
             return;
         }
 
@@ -534,5 +544,186 @@ class TelegramComment_Action extends Widget implements \Widget\ActionInterface
         }
 
         return ['inline_keyboard' => $nk];
+    }
+
+    private function handleAdminSavePushTpl(): void
+    {
+        // 后台权限：管理员
+        \Typecho\Widget::widget('Widget_User')->pass('administrator');
+
+        // 表单提交字段名可能是 pushTpl 或 TelegramNotice[pushTpl]
+        $tpl = (string)$this->req('pushTpl', '');
+        if (trim($tpl) === '') {
+            $tpl = (string)$this->req('TelegramNotice[pushTpl]', '');
+        }
+        $tpl = trim($tpl);
+
+        // 保存到插件配置
+        $db = Db::get();
+        $prefix = $db->getPrefix();
+        $options = Utils\Helper::options();
+
+        $pluginName = 'TelegramNotice';
+        $row = $db->fetchRow(
+            $db->select('value')
+                ->from($prefix . 'options')
+                ->where('name = ?', 'plugin:' . $pluginName)
+                ->limit(1)
+        );
+
+        $value = [];
+        if (is_array($row) && isset($row['value'])) {
+            $value = @unserialize((string)$row['value']);
+            if (!is_array($value)) $value = [];
+        }
+        $value['pushTpl'] = $tpl;
+
+        $db->query(
+            $db->update($prefix . 'options')
+                ->rows(['value' => serialize($value)])
+                ->where('name = ?', 'plugin:' . $pluginName)
+        );
+
+        $isAjax = false;
+        try {
+            $isAjax = strtolower((string)($this->request->getHeader('X-Requested-With') ?? '')) === 'xmlhttprequest';
+        } catch (\Throwable $e) {
+        }
+
+        if ($isAjax) {
+            $this->response->throwJson(['ok' => true, 'message' => '模板已保存']);
+        }
+
+        $this->response->redirect($options->adminUrl . 'extending.php?panel=TelegramNotice%2Fpush.php');
+    }
+
+    private function handleAdminPushPost(): void
+    {
+        // 后台权限：管理员
+        \Typecho\Widget::widget('Widget_User')->pass('administrator');
+
+        // 兼容：单篇 cid 或批量 cids[]
+        $cid = (int)$this->req('cid', '0');
+        $cids = [];
+
+        if ($cid > 0) {
+            $cids = [$cid];
+        } else {
+            $raw = $_POST['cids'] ?? [];
+            if (is_array($raw)) {
+                foreach ($raw as $v) {
+                    $id = (int)$v;
+                    if ($id > 0) $cids[] = $id;
+                }
+            }
+            $cids = array_values(array_unique($cids));
+        }
+
+        if (!$cids) {
+            $this->response->setStatus(400);
+            $this->response->throwJson(['ok' => false, 'error' => 'cid_invalid']);
+        }
+
+        $opt = Utils\Helper::options()->plugin('TelegramNotice');
+        $token = trim((string)($opt->botToken ?? ''));
+        $pushTpl = (string)($opt->pushTpl ?? '');
+        $pushChatIdsRaw = (string)($opt->pushChatId ?? '');
+
+        if ($token === '') {
+            $this->response->setStatus(400);
+            $this->response->throwJson(['ok' => false, 'error' => 'botToken_empty']);
+        }
+
+        $targets = $this->parseChatIds($pushChatIdsRaw);
+        if (!$targets) {
+            $this->response->setStatus(400);
+            $this->response->throwJson(['ok' => false, 'error' => 'pushChatId_empty', 'message' => '未配置文章推送 Chat ID（pushChatId）']);
+        }
+
+        // 逐篇推送
+        $db = Db::get();
+        $prefix = $db->getPrefix();
+
+        foreach ($cids as $cidOne) {
+            $post = $db->fetchRow(
+                $db->select('cid', 'title', 'created', 'text')
+                    ->from($prefix . 'contents')
+                    ->where('cid = ?', $cidOne)
+                    ->where('type = ?', 'post')
+                    ->limit(1)
+            );
+            if (!is_array($post)) {
+                continue;
+            }
+
+            $permalink = '';
+            try {
+                $w = Utils\Helper::widgetById('contents', $cidOne);
+                if ($w && $w->have()) {
+                    $permalink = (string)$w->permalink;
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
+
+            $text = $this->renderPostTemplate($pushTpl, $post, $permalink);
+
+            foreach ($targets as $chatId) {
+                Plugin::tgApi($token, 'sendMessage', [
+                    'chat_id' => (string)$chatId,
+                    'text' => $text,
+                    'parse_mode' => 'HTML',
+                    'disable_web_page_preview' => false,
+                ]);
+            }
+        }
+
+        $this->response->redirect(Utils\Helper::options()->adminUrl . 'extending.php?panel=TelegramNotice%2Fpush.php');
+    }
+
+    private function parseChatIds(string $raw): array
+    {
+        $raw = trim((string)$raw);
+        if ($raw === '') return [];
+        $parts = preg_split('/[,\n\r]+/', $raw) ?: [];
+        $parts = array_values(array_filter(array_map('trim', $parts), static fn($v) => $v !== ''));
+        return array_values(array_unique($parts));
+    }
+
+    private function renderPostTemplate(string $tpl, array $post, string $permalink): string
+    {
+        $tpl = trim((string)$tpl);
+        if ($tpl === '') {
+            $tpl = "📰 <b>{title}</b>\n\n{excerpt}\n\n<a href=\"{permalink}\">点击阅读</a>";
+        }
+
+        $title = (string)($post['title'] ?? '');
+        $created = (int)($post['created'] ?? time());
+        $body = (string)($post['text'] ?? '');
+
+        $excerpt = $this->makeExcerpt($body, 120);
+
+        $vars = [
+            '{title}' => htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            '{excerpt}' => htmlspecialchars($excerpt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            '{permalink}' => htmlspecialchars((string)$permalink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            '{created}' => htmlspecialchars(date('Y-m-d H:i:s', $created), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            '{cid}' => (string)((int)($post['cid'] ?? 0)),
+        ];
+
+        return strtr($tpl, $vars);
+    }
+
+    private function makeExcerpt(string $text, int $maxLen): string
+    {
+        $s = trim(strip_tags($text));
+        $s = preg_replace('/\s+/u', ' ', $s) ?? $s;
+        if (function_exists('mb_strlen') && mb_strlen($s, 'UTF-8') > $maxLen) {
+            return mb_substr($s, 0, $maxLen, 'UTF-8') . '...';
+        }
+        if (strlen($s) > $maxLen) {
+            return substr($s, 0, $maxLen) . '...';
+        }
+        return $s;
     }
 }

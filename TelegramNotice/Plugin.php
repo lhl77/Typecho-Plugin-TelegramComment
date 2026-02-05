@@ -2,11 +2,11 @@
 /**
  * TelegramNotice
  *
- * Telegram 推送评论通知与审核（支持多 Chat ID 群发、邮箱绑定、评论回复）。
+ * Telegram 推送评论通知、文章（支持多 Chat ID 群发、邮箱绑定、评论回复）。
  *
  * @package TelegramNotice
  * @author LHL
- * @version 1.0.0
+ * @version 1.1.0
  * @link https://github.com/lhl77/Typecho-Plugin-TelegramNotice
  */
 
@@ -22,16 +22,28 @@ use Typecho\Widget\Helper\Form;
 use Typecho\Widget\Helper\Form\Element\Text;
 use Typecho\Widget\Helper\Form\Element\Textarea;
 use Utils;
-use Typecho\Db;
 
 class Plugin implements PluginInterface
 {
+    /** GitHub releases/tags */
+    private const GITHUB_OWNER = 'lhl77';
+    private const GITHUB_REPO  = 'Typecho-Plugin-TelegramNotice';
+
+    /** 用于和远端 Tag 比较的当前版本（从文件头 @version 同步即可） */
+    private const VERSION = '1.1.0';
+
     public static function activate(): string
     {
         Typecho\Plugin::factory('Widget_Feedback')->finishComment = __CLASS__ . '::onFinishComment';
         Typecho\Plugin::factory('Widget_Comments_Edit')->finishComment = __CLASS__ . '::onFinishComment';
 
         Utils\Helper::addAction('telegram-comment', 'TypechoPlugin\\TelegramNotice\\TelegramComment_Action');
+
+        try {
+            $menuIndex = Utils\Helper::addMenu('TelegramNotice');
+            Utils\Helper::addPanel($menuIndex, 'TelegramNotice/push.php', 'Telegram文章推送', '手动推送文章到频道/群', 'administrator');
+        } catch (\Throwable $e) {
+        }
 
         try {
             $opt = Utils\Helper::options()->plugin('TelegramNotice');
@@ -48,8 +60,16 @@ class Plugin implements PluginInterface
 
     public static function deactivate(): string
     {
-        // 取消注册 action
         Utils\Helper::removeAction('telegram-comment');
+
+        try {
+            $menuIndex = Utils\Helper::removeMenu('TelegramNotice');
+            if ($menuIndex !== null) {
+                Utils\Helper::removePanel($menuIndex, 'TelegramNotice/push.php');
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
 
         return _t('TelegramNotice 已禁用');
     }
@@ -94,6 +114,25 @@ class Plugin implements PluginInterface
         echo '<div class="typecho-option typecho-option-submit">';
         echo '  <label class="typecho-label">' . _t('TelegramNotice') . '</label>';
         echo '  <p class="description" style="margin-top:6px;">' . _t('Telegram 推送评论通知与审核（支持多 Chat ID 群发、邮箱绑定、评论回复）。') . '</p>';
+
+        // ===== 版本检查 UI（增强：有新版本时红色提示 + 更新按钮）=====
+        echo '  <style>
+      .tg-ver-line{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;}
+      .tg-ver-ok{color:#1e8e3e;}
+      .tg-ver-warn{color:#d63638;font-weight:600;}
+      .tg-ver-muted{color:#666;}
+      .tg-ver-btns .btn{display:inline-flex;align-items:center;justify-content:center;height:30px;line-height:30px;padding:0 10px;}
+    </style>';
+
+        echo '  <div class="tg-ver-line">';
+        echo '    <span class="description" id="tg-ver-hint">' . _t('当前版本：') . htmlspecialchars(self::VERSION, ENT_QUOTES) . ' ...</span>';
+        echo '    <span class="tg-ver-btns">';
+        echo '      <button type="button" class="btn" id="tg-ver-check">' . _t('检查更新') . '</button>';
+        // echo '      <a class="btn" target="_blank" href="https://github.com/' . self::GITHUB_OWNER . '/' . self::GITHUB_REPO . '/tags">' . _t('查看 Tags') . '</a>';
+        echo '      <a class="btn primary" target="_blank" id="tg-ver-update" style="display:none;background-color:lightcoral" href="#">' . _t('前往下载更新') . '</a>';
+        echo '    </span>';
+        echo '  </div>';
+
         echo '  <a class="typecho-label" style="margin-top:6px;" target="_blank" href="https://github.com/lhl77/Typecho-Plugin-TelegramNotice">' . _t('Github项目') . '</a>&nbsp;<a class="typecho-label" style="margin-top:6px;" href="https://blog.lhl.one" target="_blank">' . _t('作者博客') . '</a><br/><br/>';
         echo '  <label class="typecho-label">' . _t('Webhook 操作') . '</label>';
         echo $needSet
@@ -103,9 +142,6 @@ class Plugin implements PluginInterface
         echo '  <p>';
         echo '    <button type="button" class="btn primary" id="tg-webhook-set">' . _t('一键配置 Webhook') . '</button> ';
         echo '    <button type="button" class="btn" id="tg-webhook-check">' . _t('重新检测') . '</button>';
-        // echo $showLog
-        //     ? '    <a class="btn" style="margin-left:6px;" href="' . htmlspecialchars($_SERVER['REQUEST_URI'], ENT_QUOTES) . '">' . _t('刷新') . '</a>'
-        //     : '';
         echo '  </p>';
 
         if ($showLog) {
@@ -219,42 +255,118 @@ class Plugin implements PluginInterface
   }, 50);
 })();
 </script>';
+
+        // ===== 版本检查脚本（有新版本 -> 红色提示 + 显示更新按钮）=====
+        echo '<script>
+(function(){
+  var cur = ' . json_encode(self::VERSION, JSON_UNESCAPED_UNICODE) . ';
+  var owner = ' . json_encode(self::GITHUB_OWNER, JSON_UNESCAPED_UNICODE) . ';
+  var repo  = ' . json_encode(self::GITHUB_REPO, JSON_UNESCAPED_UNICODE) . ';
+  var hint  = document.getElementById("tg-ver-hint");
+  var btn   = document.getElementById("tg-ver-check");
+  var upBtn = document.getElementById("tg-ver-update");
+
+  function setHint(text, cls){
+    if(!hint) return;
+    hint.textContent = text;
+    hint.classList.remove("tg-ver-ok","tg-ver-warn","tg-ver-muted");
+    if(cls) hint.classList.add(cls);
+  }
+  function showUpdate(tag){
+    if(!upBtn) return;
+    var safeTag = String(tag || "").trim();
+    if(!safeTag) return;
+    upBtn.href = "https://github.com/" + owner + "/" + repo + "/releases/tag/" + encodeURIComponent(safeTag);
+    upBtn.style.display = "";
+  }
+  function hideUpdate(){
+    if(!upBtn) return;
+    upBtn.style.display = "none";
+    upBtn.href = "#";
+  }
+
+  function normTag(tag){
+    tag = String(tag || "").trim();
+    if(tag[0] === "v" || tag[0] === "V") tag = tag.slice(1);
+    return tag;
+  }
+  function parseVer(v){
+    v = normTag(v);
+    var m = v.match(/^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
+    if(!m) return null;
+    return {maj:+m[1], min:+m[2], pat:+m[3], raw:v};
+  }
+  function cmp(a,b){
+    if(a.maj!==b.maj) return a.maj-b.maj;
+    if(a.min!==b.min) return a.min-b.min;
+    return a.pat-b.pat;
+  }
+
+  async function check(){
+    hideUpdate();
+    if(btn){ btn.disabled = true; btn.textContent = "检查中..."; }
+    setHint("当前版本：" + cur + "，", "tg-ver-muted");
+
+    try{
+      var url = "https://api.github.com/repos/" + owner + "/" + repo + "/tags?per_page=100";
+      var res = await fetch(url, { method:"GET" });
+      if(!res.ok) throw new Error("http_" + res.status);
+
+      var tags = await res.json();
+      if(!Array.isArray(tags) || tags.length === 0) throw new Error("no_tags");
+
+      var curV = parseVer(cur);
+      var best = null;
+      var bestTagName = "";
+
+      for(var i=0;i<tags.length;i++){
+        var name = tags[i] && tags[i].name ? String(tags[i].name) : "";
+        var v = parseVer(name);
+        if(!v) continue;
+        if(!best || cmp(v,best) > 0){
+          best = v;
+          bestTagName = name; // 保留原始 tag（用于链接，比如 v1.2.3）
+        }
+      }
+
+      if(!best){
+        setHint("当前版本：" + cur + "，未找到符合格式的 Tag（需 v1.0.0）", "tg-ver-muted");
+        return;
+      }
+
+      if(!curV){
+        setHint("当前版本：" + cur + "（无法解析），最新版本：" + best.raw, "tg-ver-muted");
+        showUpdate(bestTagName);
+        return;
+      }
+
+      if(cmp(best, curV) > 0){
+        setHint("发现新版本：" + best.raw + "（当前 " + cur + "），需要更新", "tg-ver-warn");
+        showUpdate(bestTagName);
+      }else{
+        setHint("当前版本：" + cur + "，已是最新（最新 " + best.raw + "）", "tg-ver-ok");
+      }
+    }catch(e){
+      setHint("当前版本：" + cur + "，检查失败（可能被 GitHub 限流或网络不可达）", "tg-ver-muted");
+    }finally{
+      if(btn){ btn.disabled = false; btn.textContent = "检查更新"; }
+    }
+  }
+
+  if(btn) btn.addEventListener("click", check);
+  window.setTimeout(check, 120);
+})();
+</script>';
+
         // Bot Token
         $token = new Text(
             'botToken',
             null,
             '',
-            _t('Bot Token'),
+            _t('Bot Token （必填）'),
             _t('从 <a href="https://t.me/botfather">@BotFather</a> 获取的 token，例如：123456:ABC-DEF...')
         );
         $form->addInput($token);
-
-        $chatId = new Text(
-            'chatId',
-            null,
-            '',
-            _t('默认 Chat ID（必填，可多个）'),
-            _t('多个 chat_id 用逗号或换行分隔；个人为纯数字；群组/频道通常为 -100 开头的数字')
-        );
-        $form->addInput($chatId);
-
-        $emailMap = new Textarea(
-            'emailChatMap',
-            null,
-            "",
-            _t('邮箱 -> Chat ID 绑定 (选填，如需回复功能则必填)'),
-            _t("每行一条：email=chat_id\n示例：user@example.com=123456789\n命中后可单独推送给该 chat_id（并可叠加默认群发）")
-        );
-        $form->addInput($emailMap);
-
-        $alsoSendDefault = new Text(
-            'alsoSendDefault',
-            null,
-            '1',
-            _t('命中邮箱绑定时仍群发默认 Chat ID'),
-            _t('1=是，0=否（默认 1）')
-        );
-        $form->addInput($alsoSendDefault);
 
         // Webhook Secret
         $webhookSecret = new Text(
@@ -265,6 +377,33 @@ class Plugin implements PluginInterface
             _t('用于校验 webhook 请求来源（建议生成一段随机字符串）。将拼接到 /action/telegram-comment?do=webhook&secret=...')
         );
         $form->addInput($webhookSecret);
+        
+        $chatId = new Text(
+            'chatId',
+            null,
+            '',
+            _t('评论推送：默认 Chat ID（必填，可多个）'),
+            _t('多个 chat_id 用逗号或换行分隔；个人为纯数字；群组/频道通常为 -100 开头的数字')
+        );
+        $form->addInput($chatId);
+
+        $emailMap = new Textarea(
+            'emailChatMap',
+            null,
+            "",
+            _t('评论推送：邮箱 -> Chat ID 绑定 (选填，如需回复功能则必填)'),
+            _t("每行一条：email=chat_id\n示例：user@example.com=123456789\n命中后可单独推送给该 chat_id（并可叠加默认群发）")
+        );
+        $form->addInput($emailMap);
+
+        $alsoSendDefault = new Text(
+            'alsoSendDefault',
+            null,
+            '1',
+            _t('评论推送：命中邮箱绑定时仍群发默认 Chat ID'),
+            _t('1=是，0=否（默认 1）')
+        );
+        $form->addInput($alsoSendDefault);
 
         // 消息模板（HTML）
         $tplDefault = "🎉 您的文章 <b>{title}</b> 有新的回复！\n\n<b>{author} ：</b><code>{text}</code>";
@@ -272,10 +411,41 @@ class Plugin implements PluginInterface
             'messageTpl',
             null,
             $tplDefault,
-            _t('消息模板（HTML）'),
+            _t('评论推送：模板（HTML）'),
             _t('变量：{title} {author} {text} {permalink} {ip} {created} {coid} {mail}')
         );
         $form->addInput($tpl);
+
+        $pushChatId = new Text(
+            'pushChatId',
+            null,
+            '',
+            _t('文章推送：Chat ID（频道/群）'),
+            _t('用于文章手动推送的目标 chat_id（例如频道：-100xxxxxxxxxx）。可多个，逗号/换行分隔。')
+        );
+        $form->addInput($pushChatId);
+
+        // 文章推送模板
+        $pushTplDefault = "📰 <b>{title}</b>\n\n{excerpt}\n\n<a href=\"{permalink}\">点击阅读</a>";
+        $pushTpl = new Textarea(
+            'pushTpl',
+            null,
+            $pushTplDefault,
+            _t('文章推送：模板（HTML）'),
+            _t('变量：{title} {excerpt} {permalink} {created} {cid}')
+        );
+        $form->addInput($pushTpl);
+
+        $siteUrl = rtrim((string)Utils\Helper::options()->siteUrl, '/');
+        $adminUrl = $siteUrl . '/admin/';
+        $pushPage = $adminUrl . 'options-plugin.php?config=TelegramNotice&tab=push'; 
+
+        echo '<div class="typecho-option typecho-option-submit">';
+        echo '  <label class="typecho-label">' . _t('文章推送') . '</label>';
+        echo '  <p class="description">' . _t('手动推送文章：打开下方管理页。') . '</p>';
+
+        echo '  <p><a class="btn primary" style="display:inline-flex;align-items:center;justify-content:center;height:32px;padding:0 12px;line-height:32px;box-sizing:border-box;" href="' . htmlspecialchars($adminUrl . 'extending.php?panel=TelegramNotice%2Fpush.php', ENT_QUOTES) . '" target="_self">' . _t('打开 Telegram 文章推送页') . '</a></p>';
+        echo '</div>';
     }
 
     public static function configCheck($settings): void
@@ -292,7 +462,6 @@ class Plugin implements PluginInterface
             $siteUrl = (string)Utils\Helper::options()->siteUrl;
             $wantUrl = self::buildWebhookUrl($siteUrl, $secret);
 
-            // 每次保存都强制重设 webhook（带 allowed_updates）
             self::tgSetWebhook($token, $wantUrl);
         } catch (\Throwable $e) {
             // 不阻断保存流程
@@ -369,7 +538,7 @@ class Plugin implements PluginInterface
 
         $msg = self::renderTemplate($tpl, $comment);
 
-        // 在消息末尾追加“回复关联标记”（用于 Telegram 直接回复）
+        // 在消息末尾追加“回复关联标记"
         $cid = (int)($comment->cid ?? 0);
         $coid = (int)($comment->coid ?? 0);
         if ($cid > 0 && $coid > 0) {
@@ -639,7 +808,7 @@ class Plugin implements PluginInterface
         return "成功（Webhook 已配置）";
     }
 
-    private static function tgApi(string $token, string $method, array $params): array
+    public static function tgApi(string $token, string $method, array $params): array
     {
         $url = "https://api.telegram.org/bot{$token}/{$method}";
         $context = stream_context_create([
