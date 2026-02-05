@@ -23,6 +23,8 @@ Telegram 推送 Typecho 评论通知与审核（支持多 Chat ID 群发、邮�
 - 支持在 Telegram 中 **直接回复推送消息** 来发布 Typecho 回复评论
 - Webhook 一键配置/检测（插件设置页内按钮触发 AJAX）
 
+TODO:
+文章推送
 ---
 
 ## 目录结构说明
