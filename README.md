@@ -155,4 +155,4 @@ admin@example.com=-1001234567890
 
 ## License
 
-MIT
+MIT License
