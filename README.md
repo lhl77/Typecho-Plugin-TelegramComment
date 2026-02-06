@@ -5,7 +5,7 @@
 [![Stars](https://img.shields.io/github/stars/lhl77/Typecho-Plugin-TelegramNotice?style=flat)](https://github.com/lhl77/Typecho-Plugin-TelegramNotice/stargazers)
 [![License](https://img.shields.io/github/license/lhl77/Typecho-Plugin-TelegramNotice)](https://github.com/lhl77/Typecho-Plugin-TelegramNotice/blob/main/LICENSE)
 [![Typecho](https://img.shields.io/badge/Typecho-Plugin-blue)](https://typecho.org/)
-[![PHP](https://img.shields.io/badge/PHP-%3E%3D7.0-777bb4?logo=php&logoColor=white)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/PHP-%3E%3D7.2-777bb4?logo=php&logoColor=white)](https://www.php.net/)
 [![Telegram Bot API](https://img.shields.io/badge/Telegram-Bot%20API-26a5e4?logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
 [![Webhook](https://img.shields.io/badge/Webhook-Supported-success)](https://core.telegram.org/bots/api#setwebhook)
 [![Status](https://img.shields.io/badge/Status-Active-success)](#)
