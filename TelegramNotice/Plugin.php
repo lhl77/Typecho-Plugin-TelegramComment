@@ -6,7 +6,7 @@
  *
  * @package TelegramNotice
  * @author LHL
- * @version 1.1.0
+ * @version 1.1.1
  * @link https://github.com/lhl77/Typecho-Plugin-TelegramNotice
  */
 
@@ -30,7 +30,7 @@ class Plugin implements PluginInterface
     private const GITHUB_REPO  = 'Typecho-Plugin-TelegramNotice';
 
     /** 用于和远端 Tag 比较的当前版本（从文件头 @version 同步即可） */
-    private const VERSION = '1.1.0';
+    private const VERSION = '1.1.1';
 
     public static function activate(): string
     {

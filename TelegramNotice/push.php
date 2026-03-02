@@ -103,11 +103,13 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
 
         <style>
             .tg-card {
-                margin: 12px;
-                padding: 12px;
+                margin: 12px 0;
+                padding: 16px;
                 border: 1px solid #e5e5e5;
                 border-radius: 6px;
-                background-color: #f2f2f2
+                background-color: #f2f2f2;
+                box-sizing: border-box;
+                width:100%;
             }
 
             .tg-card h3 {
@@ -116,16 +118,21 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
             }
 
             .tg-row {
-                margin: 12px;
+                margin: 12px 0;
                 display: flex;
                 gap: 10px;
                 align-items: center;
                 flex-wrap: wrap;
             }
 
+            .tg-actions.tg-row {
+                margin: 10px 0 0 0;
+                justify-content: flex-end;
+            }
+
             .tg-grow {
-                flex: 1 1 260px;
-                min-width: 220px;
+                flex: 1 1 200px;
+                min-width: 160px;
             }
 
             .tg-muted {
@@ -147,17 +154,12 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
             }
 
             .tg-stickybar {
-                margin: 12px;
-                padding: 12px;
-                border: 1px solid #e5e5e5;
+                margin: 12px 0;
+                /* border: 1px solid #e5e5e5; */
                 border-radius: 6px;
                 background-color: #f2f2f2;
-                position: sticky;
-                top: 0;
-                z-index: 5;
-                border-bottom: 1px solid #eee;
-                padding: 8px 0;
-                margin-bottom: 10px;
+                padding: 8px 12px;
+                box-sizing: border-box;
             }
 
             .tg-input {
@@ -178,10 +180,14 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                 line-height: 32px;
                 padding: 0 12px;
                 box-sizing: border-box;
+                cursor: pointer;
+                gap: 4px;
             }
 
             .tg-table {
                 table-layout: fixed;
+                width: 100%;
+                margin: 0;
             }
 
             .tg-table td {
@@ -212,6 +218,11 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                 padding: 0 12px;
                 line-height: 32px;
                 box-sizing: border-box;
+                margin-left: auto;
+            }
+            
+            .tg-row.tg-actions {
+                margin: 10px 0 0 0;
             }
 
             /* 修复：你当前表格只有 4 列（CID/标题/发布时间/操作），
@@ -254,33 +265,48 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                 z-index: 9999;
                 background: rgba(0, 0, 0, .82);
                 color: #fff;
-                padding: 10px 12px;
+                padding: 10px 14px;
                 border-radius: 6px;
-                font-size: 13px;
-                line-height: 18px;
+                font-size: 14px;
+                line-height: 20px;
                 max-width: 66vw;
                 box-sizing: border-box;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             }
 
             /* 让“操作”列在窄屏时更窄，标题列优先展示 */
             .tg-table th:last-child,
             .tg-table td:last-child {
                 white-space: nowrap;
+                text-align: right;
+            }
+
+            .tg-actions form {
+                margin: 0;
+            }
+
+            .tg-table th,
+            .tg-table td {
+                padding: 10px 8px;
             }
 
             .tg-actions .btn {
                 padding: 0 10px;
-                /* 默认稍微收一点 */
                 min-width: 0;
             }
 
-            /* 窄屏：进一步压缩操作列按钮，只显示“推”字（标题获得更多空间） */
             @media (max-width: 560px) {
                 .tg-table colgroup col:last-child {
                     width: 72px !important;
                 }
 
-                /* 操作列变窄 */
+                .tg-table colgroup col:first-child {
+                    width: 40px !important;
+                }
+
                 .tg-actions .btn {
                     padding: 0 8px;
                     font-size: 12px;
@@ -307,6 +333,10 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                 .tg-table colgroup col:last-child {
                     width: 56px !important;
                 }
+                
+                .tg-table colgroup col:first-child {
+                    width: 36px !important;
+                }
 
                 .tg-actions .btn {
                     padding: 0 6px;
@@ -314,28 +344,26 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
             }
         </style>
 
-        <!-- 置顶操作栏：搜索 + 状态 -->
-        <div class="tg-stickybar">
-            <div class="tg-row">
-                <input class="tg-input tg-grow" type="text" id="tg-q"
-                    value="<?php echo htmlspecialchars($q, ENT_QUOTES); ?>" placeholder="<?php _e('按标题/内容搜索'); ?>">
-                <span class="tg-badge"
-                    id="tg-search-hint"><?php echo $total ? ('共 ' . (int) $total . ' 篇') : '无结果'; ?></span>
-                <a class="btn" id="tg-clear"
-                    href="<?php echo htmlspecialchars($panelUrlBase, ENT_QUOTES); ?>"><?php _e('清空'); ?></a>
-            </div>
-        </div>
-
-
         <section class="tg-card">
-            <h2 style="margin:5px 10px;"><?php _e('文章列表'); ?></h2>
+            <h2 style="margin:5px 0 15px 0; font-size: 16px;"><?php _e('文章列表'); ?></h2>
+
+            <!-- 搜索栏（放到文章列表 Box 内） -->
+            <div class="tg-stickybar" style="margin:0 0 12px 0;">
+                <div class="tg-row" style="margin: 0;">
+                    <input class="tg-input tg-grow" style="max-width: 320px;" type="text" id="tg-q"
+                        value="<?php echo htmlspecialchars($q, ENT_QUOTES); ?>" placeholder="<?php _e('按标题或内容搜索...'); ?>">
+                    <span class="tg-badge"
+                        id="tg-search-hint"><?php echo $total ? ('共 ' . (int) $total . ' 篇') : '无结果'; ?></span>
+                    
+                </div>
+            </div>
 
             <table class="typecho-list-table tg-table">
                 <colgroup>
-                    <col width="80">
+                    <col width="60">
                     <col>
-                    <col width="180">
                     <col width="160">
+                    <col width="80">
                 </colgroup>
                 <thead>
                     <tr>
@@ -354,11 +382,13 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                                 <?php echo htmlspecialchars((string) $row['title'], ENT_QUOTES); ?>
                             </td>
                             <td><?php echo date('Y-m-d H:i', (int) $row['created']); ?></td>
-                            <td class="tg-actions">
+                            <td class="tg-actions" style="text-align: right;">
                                 <form method="post" style="display:inline"
                                     action="<?php echo htmlspecialchars($options->index . '/action/telegram-comment?do=pushPost', ENT_QUOTES); ?>">
                                     <input type="hidden" name="cid" value="<?php echo (int) $row['cid']; ?>">
-                                    <button class="btn primary" type="submit"><span><?php _e('推送'); ?></span></button>
+                                    <button class="btn primary" type="submit">
+                                        <i class="i-link"></i> <span><?php _e('推送'); ?></span>
+                                    </button>
                                 </form>
                             </td>
                         </tr>
@@ -372,10 +402,10 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                     <?php endif; ?>
                 </tbody>
             </table>
-            <div class="tg-row tg-actions" style="margin:6px 0 10px;">
+            <div class="tg-actions tg-row">
                 <span class="tg-muted tg-mini" id="tg-selected-hint" style="display:none;"></span>
 
-                <div class="tg-right tg-row tg-actions">
+                <div class="tg-right tg-actions" style="display:flex;gap:10px;align-items:center;">
                     <a class="btn" id="tg-prev"
                         href="<?php echo htmlspecialchars($panelUrlBase . '&q=' . rawurlencode($q) . '&page=' . max(1, $page - 1), ENT_QUOTES); ?>"><?php _e('上一页'); ?></a>
                     <a class="btn" id="tg-next"
@@ -391,10 +421,10 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
             <h3><?php _e('推送配置'); ?></h3>
 
             <p class="description tg-muted">
-                <?php _e('推送目标 Chat ID 在插件设置中配置（pushChatId）。'); ?>
+                <?php _e('推送目标 Chat ID 必须在插件基本设置内配置才能生效（配置项名：pushChatId）。'); ?>
             </p>
 
-            <div class="tg-row">
+            <div class="tg-row" style="margin: 10px 0;">
                 <div class="tg-badge">
                     <b><?php _e('推送ChatId：'); ?></b>
                     <span><?php echo htmlspecialchars($pushChatId ?: '(未配置)', ENT_QUOTES); ?></span>
@@ -409,14 +439,14 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                 style="margin-top:10px;">
                 <p class="tg-mini tg-muted" style="margin:0 0 6px;"><?php _e('文章推送模板（HTML）'); ?></p>
                 <p style="margin:0;">
-                    <textarea name="pushTpl"
-                        style="width:100%;min-height:140px;"><?php echo htmlspecialchars($pushTpl, ENT_QUOTES); ?></textarea>
+                    <textarea name="pushTpl" class="tg-input"
+                        style="width: 100%; min-height: 140px; padding: 10px; max-width: 100%; resize: vertical;"><?php echo htmlspecialchars($pushTpl, ENT_QUOTES); ?></textarea>
                 </p>
                 <p class="description tg-muted" style="margin-top:6px;">
                     <?php _e('变量：{title} {excerpt} {permalink} {created} {cid}'); ?>
                 </p>
                 <p class="tg-actions" style="margin-top:8px;">
-                    <button class="btn primary" type="submit"><?php _e('保存模板'); ?></button>
+                    <button class="btn primary" type="submit"><?php _e('保存配置'); ?></button>
                 </p>
             </form>
         </section>
@@ -434,13 +464,17 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
         var prevBtn = document.getElementById('tg-prev');
         var nextBtn = document.getElementById('tg-next');
 
+        var msgTimeout = null;
         function toast(msg, ms) {
             ms = ms || 1800;
+            var exist = document.querySelector('.tg-toast');
+            if (exist) exist.parentNode.removeChild(exist);
             var el = document.createElement('div');
             el.className = 'tg-toast';
-            el.textContent = msg;
+                el.innerHTML = msg; // 允许 HTML，例如加粗图标等
             document.body.appendChild(el);
-            setTimeout(function () {
+            if (msgTimeout) clearTimeout(msgTimeout);
+            msgTimeout = setTimeout(function () {
                 try { el.parentNode && el.parentNode.removeChild(el); } catch (e) { }
             }, ms);
         }
@@ -475,16 +509,16 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
 
                             if (data && typeof data === 'object') {
                                 if (data.ok === true) {
-                                    toast(data.message || '推送成功');
+                                    toast('<i class="i-check"></i> ' + (data.message || '推送成功'));
                                 } else {
-                                    toast((data.message || '推送失败') + (data.error ? ('（' + data.error + '）') : ''), 2500);
+                                    toast('<i class="i-exclamation"></i> ' + (data.message || '推送失败') + (data.error ? ('（' + data.error + '）') : ''), 2500);
                                 }
                             } else {
                                 // 非 JSON：按状态码给个结果（避免无反馈）
-                                toast(res.ok ? '推送完成' : '推送失败', res.ok ? 1800 : 2500);
+                                toast(res.ok ? '<i class="i-check"></i> 推送完成' : '<i class="i-exclamation"></i> 推送失败', res.ok ? 1800 : 2500);
                             }
                         } catch (err) {
-                            toast('推送失败：网络错误', 2500);
+                            toast('<i class="i-exclamation"></i> 推送失败：网络错误', 2500);
                         } finally {
                             if (btn) {
                                 btn.removeAttribute('data-loading');
@@ -508,10 +542,10 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
                 + '  <td>' + cid + '</td>'
                 + '  <td class="tg-titlecell" title="' + escapeAttr(title) + '">' + escapeHtml(title) + '</td>'
                 + '  <td>' + escapeHtml(createdText) + '</td>'
-                + '  <td class="tg-actions">'
+                + '  <td class="tg-actions" style="text-align: right;">'
                 + '    <form method="post" style="display:inline" action="' + escapeAttr(actionUrl) + '">'
                 + '      <input type="hidden" name="cid" value="' + cid + '">'
-                + '      <button class="btn primary" type="submit"><span>推送</span></button>'
+                + '      <button class="btn primary" type="submit"><i class="i-link"></i> <span>推送</span></button>'
                 + '    </form>'
                 + '  </td>'
                 + '</tr>';
@@ -560,7 +594,7 @@ $panelUrlBase = $options->adminUrl . 'extending.php?panel=' . rawurlencode($pane
             if (data.items && data.items.length) {
                 for (var i = 0; i < data.items.length; i++) html += buildRow(data.items[i]);
             } else {
-                html = '<tr><td colspan="4"><p class="description">没有匹配的文章</p></td></tr>';
+                html = '<tr><td colspan="4"><p class="description tg-muted">没有匹配的文章</p></td></tr>';
             }
             tbody.innerHTML = html;
 
